@@ -6,29 +6,15 @@ var env = process.env
 
 const NODEJS_BIN = 'node'
 
-
-function unset(key)
-{
-  if(env[key] == undefined)
-  {
-    console.error('Unknown environment key:',key)
-    process.exit(2)
-  }
-
-  env[key] = undefined
-}
-
-
+// Skip '/bin/node' and '/path/to/env'
 var argv = process.argv.slice(2)
 
 // Options
-for(; argv.length; argv.shift())
+for(; argv.length && argv[0][0] == '-';)
 {
-  var arg = argv[0]
+  var arg = argv.shift()
 
-  if(arg[0] != '-') break;
-
-  switch(arg[0])
+  switch(arg)
   {
     case '-':
     case '-i':
@@ -45,38 +31,32 @@ for(; argv.length; argv.shift())
     case '--unset':
     {
       argv.shift()
-      unset(argv[0])
+      env[argv[0]] = undefined
     }
     break;
 
     default:
       if(arg.substr(0,8) == '--unset=')
       {
-        unset(arg.substr(8))
+        env[arg.substr(8)] = undefined
         break
       }
 
-      console.error('Unknown argument:',arg)
-      process.exit(1)
+      console.error('Unknown option:', arg)
+      process.exit(125)
   }
 }
 
 
-// Environment variabless
+// Environment variables
 if(ignoreEnvironment)
   process.env = env = {}
 
-for(; argv.length; argv.shift())
-{
-  var arg = argv[0].split('=')
-
-  if(arg.length < 2) break;
-
-  var key   = arg.shift()
-  var value = arg.join('=')
-
-  env[key] = value;
-}
+for (var m
+     ; argv.length
+       && (m = argv[0].match('([^=]*)=(.*)')) !== null
+     ; argv.shift)
+  env[m[1]] = m[2]
 
 // Exec command or show environment variables
 var command = argv.shift()
@@ -87,17 +67,20 @@ if(command)
 
   if(command === NODEJS_BIN)
   {
-    // We are trying to execute a Node.js script, re-use the current instance.
-    // This require that the Node.js script don't use any execution trick like
+    // We are trying to execute a Node.js script, so re-use the current instance.
+    // This requires that the Node.js script doesn't do any execution tricks like
     // checking "!module.parent" or "require.main === module". If you want your
     // package to work both as a library and an executable, define it in two
-    // diferent scripts and use package.json "main" and "bin" entries.
+    // different scripts and use package.json "main" and "bin" entries.
     process.argv = [NODEJS_BIN].concat(argv)
 
     return require(argv[0])
   }
 
   require('kexec')(command, argv)
+  
+  console.error('Cannot invoke:', command)
+  process.exit(127)
 }
 else
 {
